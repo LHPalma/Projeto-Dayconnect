@@ -261,7 +261,7 @@ def extrair_data_hora_da_pagina(wait: WebDriverWait) -> str:
     """
     try:
         # Localizador do parágrafo que contém a informação de atualização (baseado na imagem)
-        xpath_info = "//app-aviso-titulos_ng/div/p"
+        xpath_info = "//app-aviso-titulos/div/p"
         
         print("Buscando informação de data/hora do relatório...")
         
@@ -274,14 +274,17 @@ def extrair_data_hora_da_pagina(wait: WebDriverWait) -> str:
         print(f"Texto encontrado: '{texto_completo.split('.')[0]}'")
         
         
-        match = re.search(r'(\d{2}/\d{2}/\d{4}) às (\d{2}) horas', texto_completo)
+        match = re.search(r'(\d{2}/\d{2}/\d{4}) [àá]s (\d{2}) horas', texto_completo)
         
         if match:
             data_str = match.group(1) # Ex: 02/10/2025
             hora_str = match.group(2) # Ex: 02
             
+            hora_24h = convert_to_24h(hora_str, None)
+            hora_24h = "12"
+            
             data_formatada = data_str.replace('/', '-') # Remove as barras
-            nome_arquivo_base = f"{data_formatada}_{hora_str}00" 
+            nome_arquivo_base = f"{data_formatada}_{hora_24h}00" 
             print(f"Nome de arquivo base gerado: {nome_arquivo_base}")
             return nome_arquivo_base
         else:
@@ -291,6 +294,60 @@ def extrair_data_hora_da_pagina(wait: WebDriverWait) -> str:
     except Exception as e:
         print(f"Erro ao extrair data/hora: {e}")
         return datetime.now().strftime("%d%m%Y_%H%M") # Nome de arquivo de fallback
+
+
+def convert_to_24h(hora_str: str, periodo_str: str | None) -> str:
+    """
+    Converte uma hora no formato 12h (que o site envia) para 24h, aplicando a regra 
+    de inferência baseada no horário atual do sistema se o indicador de período for ambíguo.
+    Retorna a hora em formato string de 2 dígitos (ex: '05', '17').
+    """
+
+    hora_int = int(hora_str)
+    adicionar_doze_horas = False
+    
+    # 1. Prioridade 1: Lógica com indicador AM/PM/tarde/manhã explícito
+    if periodo_str:
+        if re.search(r'PM|da tarde|da noite', periodo_str, re.IGNORECASE):
+            # 1 PM até 11 PM -> Adiciona 12h. 12 PM (meio-dia) permanece 12h.
+            if hora_int >= 1 and hora_int <= 11:
+                adicionar_doze_horas = True
+        elif re.search(r'AM|da manhã', periodo_str, re.IGNORECASE):
+            # 12 AM (Meia-noite) -> 00h.
+            if hora_int == 12:
+                hora_int = 0
+    
+    # 2. Prioridade 2 (Regra de Inferência p/ 1h-11h):
+    elif hora_int >= 1 and hora_int <= 11:
+        hora_atual_sistema = datetime.now().hour 
+        
+        # Se a hora extraída for < 12 e o sistema estiver após meio-dia (>= 12h), assume-se PM.
+        if hora_atual_sistema >= 12: 
+            adicionar_doze_horas = True
+
+    # 3. Prioridade 3 (Regra de Inferência p/ 12h ambíguo - O seu pedido)
+    # Se não há indicador (not periodo_str) e a hora é 12, precisamos inferir:
+    elif hora_int == 12 and not periodo_str:
+        hora_atual_sistema = datetime.now().hour
+        
+        # Se a hora atual do sistema estiver próxima da meia-noite (0h ou 1h), 
+        # o relatório de "12 horas" é mais provável ser 12 AM (00h).
+        if hora_atual_sistema <= 1: 
+             print("Alerta: Hora 12h ambígua. Inferindo AM (meia-noite) com base no horário atual do sistema.")
+             hora_int = 0 # 12 AM -> 00h
+        # Se o sistema estiver em qualquer outra hora (2h a 23h), 
+        # assumimos que o 12h é 12 PM (meio-dia).
+        else:
+             print("Alerta: Hora 12h ambígua. Inferindo PM (meio-dia) com base no horário atual do sistema.")
+             # hora_int já é 12, então não é necessário adicionar 12.
+            
+    # Aplica a transformação de 12h para 24h
+    if adicionar_doze_horas:
+        hora_int += 12
+    
+    # Retorna a hora formatada com 2 dígitos (ex: '05' ou '17')
+    return f"{hora_int:02d}"
+
 
 def baixar_excel(driver: WebDriver, wait: WebDriverWait, nome_arquivo_base: str) -> str | Path:
     print("Iniciando processo de download do Excel...")
@@ -398,7 +455,7 @@ def main():
     sleep(3)
 
     driver.get(URL_PREVIA_DE_TITULOS)
-
+    sleep(5)
     nome_excel_base = extrair_data_hora_da_pagina(wait)
 
     baixar_excel(driver, wait, nome_excel_base)
