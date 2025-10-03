@@ -1,6 +1,7 @@
 import base64
 import datetime
 from io import BytesIO
+import logging
 import os
 from pathlib import Path
 import re
@@ -21,6 +22,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 
 from ChromeDriver import ChromeDriver
+
+from data_controller import process_and_upload
 
 # --- CONFIGURAÇÕES GLOBAIS ---
 URL_LOGIN = "https://ecode.daycoval.com.br/Login.aspx"
@@ -458,7 +461,16 @@ def main():
     sleep(5)
     nome_excel_base = extrair_data_hora_da_pagina(wait)
 
-    baixar_excel(driver, wait, nome_excel_base)
+    caminho_arquivo = baixar_excel(driver, wait, nome_excel_base)
+
+    if caminho_arquivo and os.path.exists(caminho_arquivo):
+        logging.info(f"Arquivo baixado com sucesso: {caminho_arquivo}")
+        logging.info(f"Iniciando fase de UPLOAD")
+        
+        process_and_upload(caminho_arquivo, nome_excel_base)
+    else:
+        logging.error("Não foi possível processar o arquivo. Download falhou ou caminho inválido.")
+
 
     sleep(15)
     driver.quit()
