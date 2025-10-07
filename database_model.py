@@ -1,13 +1,13 @@
 import urllib
 from sqlalchemy import create_engine, text
+import pandas as pd
 import pyodbc # Importar pyodbc é necessário para que a engine funcione
 
 # --- CONFIGURAÇÕES DO BANCO DE DADOS ---
 SERVER = "192.168.1.219"
 DATABASE = "PLANEJAMENTO"
-USERNAME = "Planejamento"
-PASSWORD = "xmypKOjvRxucrm9o"
-# Nome do driver que funcionou na sua máquina
+USERNAME = "svc_desenvolvimento"
+PASSWORD = "Desenvolvimento#2740"
 DRIVER_NAME = "SQL Server" 
 TABLE_NAME = "LIQUIDADOS"
 
@@ -57,3 +57,76 @@ def upload_dataframe_to_sql(df, engine):
     )
     
     print("Model: Dados inseridos no SQL Server com sucesso.")
+    
+    
+def fetch_processed_ids(engine) -> list[str]:
+    """
+    Executa a query fornecida pelo usuário para buscar todos os IDs de títulos 
+    com ocorrência '579' registrada hoje no sistema de origem.
+    Retorna uma lista de strings (IDs).
+    """
+    from sqlalchemy import text
+    
+    # A query original que busca IDs já processados no sistema de origem (cobsystems3)
+    SQL_QUERY_PROCESSED_IDS = """
+    SELECT 
+RTRIM(CONTRATO_TIT) 
+AS CONTRATO, 
+D.TITULO_OCOR, 
+REPLACE(REPLACE(LTRIM(RTRIM(SUBSTRING(COMPLEMENTO_HIST_CLI,CHARINDEX('/', COMPLEMENTO_HIST_CLI) + 1,
+CHARINDEX(',', COMPLEMENTO_HIST_CLI) - CHARINDEX('/', COMPLEMENTO_HIST_CLI) - 1))),' ', ''), '-', '')
+AS  ID, 
+A.DATA_CAD 
+FROM [192.168.0.143].cobsystems3.dbo.HISTORICOS_CLIENTES A	WITH(NOLOCK)
+INNER JOIN [192.168.0.143].cobsystems3.dbo.HISTORICOS_CLIENTES_TITULOS B WITH(NOLOCK)
+	ON A.COD_HIST_CLI = B.COD_HIST_CLI
+INNER JOIN [192.168.0.143].cobsystems3.dbo.TITULOS C WITH(NOLOCK)
+	ON B.COD_TIT = C.COD_TIT
+INNER JOIN [192.168.0.143].cobsystems3.dbo.OCORRENCIAS_CLIENTES D WITH(NOLOCK)
+	ON A.COD_OCOR = D.COD_OCOR
+WHERE A.COD_OCOR = '579'
+AND CONVERT(DATE, A.DATA_CAD) = CONVERT(DATE, GETDATE())
+    """
+    
+    print("Model: Consultando IDs já processados no sistema de origem...")
+    
+    try:
+        with engine.connect() as connection:
+            # Use o pandas.read_sql para executar a consulta e obter um DataFrame
+            # NOTA: O pandas.read_sql pode ser lento para grandes volumes.
+            df_processed = pd.read_sql(text(SQL_QUERY_PROCESSED_IDS), connection)
+            
+            # Converte a coluna 'ID' para lista de strings
+            processed_ids = df_processed['ID'].astype(str).tolist()
+            print(f"Model: {len(processed_ids)} IDs já processados encontrados para exclusão.")
+            return processed_ids
+
+    except Exception as e:
+        print(f"ERRO no Model (fetch_processed_ids): Falha ao executar a query de exclusão: {e}")
+        return [] # Retorna lista vazia para processar tudo em caso de falha de consulta
+    
+
+if __name__ == "__main__":
+    fetch_processed_ids(create_sql_engine())
+    destino_engine = create_sql_engine() 
+    
+    try:
+        print("\n--- TESTE DE CONEXÃO: SERVIDOR DE DESTINO (192.168.1.219) ---")
+        with destino_engine.connect() as connection:
+            # Executa a query simples para confirmar a autenticação e o acesso
+            result = connection.execute(text("SELECT GETDATE()"))
+            data_hora_servidor = result.fetchone()[0]
+            print("SUCESSO: Conexão básica com o Servidor de DESTINO estabelecida!")
+            print(f"Data/Hora do Servidor (219): {data_hora_servidor}")
+            
+    except Exception as e:
+        print("\nERRO CRÍTICO NA CONEXÃO DE DESTINO: Falha ao conectar ao 192.168.1.219.")
+        print("A autenticação para o login 'Planejamento' falhou. Verifique as credenciais.")
+        print(f"Detalhes: {e}")
+        
+
+
+    # Opcional: Adicione a lógica de teste do Servidor de Origem abaixo para isolar o problema 
+    # (Com as credenciais substituídas)
+    # origem_engine = create_sql_engine_origem()
+    
