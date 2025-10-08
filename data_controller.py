@@ -6,7 +6,8 @@ from datetime import datetime
 from pathlib import Path
 
 # O Controller importa as funções de persistência do Model
-from database_model import create_sql_engine, upload_dataframe_to_sql
+from database_model import create_sql_engine, upload_dataframe_to_sql, fetch_processed_ids
+
 
 # A string de data/hora do site virá no formato DDMMAAAA_HHMM (e.g., '02102025_1400')
 DATA_FORMAT_SITE = "%d-%m-%Y_%H-%M"
@@ -86,29 +87,62 @@ def transform_data(df: pd.DataFrame, data_atualizacao_str: str) -> pd.DataFrame:
     df.to_excel("debug_transformacao.xlsx", index=False)  # Debug: Salva o DataFrame transformado em Excel
     
     # 5. Seleciona e retorna colunas na ordem do banco
-    #return df[['NossoNumero', 'CpfCnpj', 'NomeSacado', 'DataVencimento', 'VlrPago', 
-    #           'NossoNumeroFormatado', 'DataImportacao', 'DataUltAtualizacao']]
-
+    return df[['NossoNumero', 'CpfCnpj', 'NomeSacado', 'DataVencimento', 'VlrPago', 
+               'NossoNumeroFormatado', 'DataImportacao', 'DataUltAtualizacao']]
 
 def process_and_upload(caminho_arquivo_csv: Path, data_atualizacao_str: str):
     """Função principal do Controller: Orquestra a ETL (Extração, Transformação e Carga)."""
     
     try:
+        # 1. Carrega dados brutos
         print(f"Controller: Lendo arquivo CSV: {caminho_arquivo_csv.name}")
-        df_raw = pd.read_csv(caminho_arquivo_csv)
+        df_raw = pd.read_excel(caminho_arquivo_csv) # Conteúdo de exemplo:
         
-        # 1. Transformação (Lógica do Controller)
+        # 2. Transformação inicial (inclui limpeza de VlrPago e formatação de datas)
         df_transformed = transform_data(df_raw, data_atualizacao_str)
         
-        # 2. Persistência (Chama o Model)
-        sql_engine = create_sql_engine() # Chama o Model para criar a conexão
-        upload_dataframe_to_sql(df_transformed, sql_engine) # Chama o Model para salvar
+        # --- NOVA LÓGICA DE DEDUPLICAÇÃO ---
+        
+        # 2.1. Inicia a conexão com o banco
+        sql_engine = create_sql_engine()
+        
+        # 2.2. Busca os IDs já processados
+        processed_ids = fetch_processed_ids(sql_engine) # Busca IDs (ex: '11218353514')
+        print(processed_ids)
+        
+        if processed_ids:
+            # Garante que a coluna de comparação do DataFrame também seja uma string de 11 dígitos
+            df_transformed['NossoNumero_Str'] = df_transformed['NossoNumero'].astype(str).str[-11:]
+            
+            # Filtra o DataFrame: mantém APENAS os títulos cujo NossoNumero AINDA NÃO estão na lista de processados
+            df_to_upload = df_transformed[~df_transformed['NossoNumero_Str'].isin(processed_ids)].copy()
+            
+            # Remove a coluna auxiliar antes do upload
+            del df_to_upload['NossoNumero_Str']
+            
+            num_duplicates = len(df_transformed) - len(df_to_upload)
+            print(f"Controller: {num_duplicates} títulos duplicados (já processados com Ocorrência 579) foram removidos.")
+            print(f"Controller: {len(df_to_upload)} novos títulos prontos para upload.")
+            
+        else:
+            # Se a busca falhou ou retornou vazia, subimos todos os transformados.
+            df_to_upload = df_transformed.copy()
+
+        # 3. Persistência (Chama o Model para salvar APENAS os novos)
+        if not df_to_upload.empty:
+            upload_dataframe_to_sql(df_to_upload, sql_engine)
+        else:
+            print("Controller: Nenhum novo título para fazer upload. Encerrando upload.")
+
+        # 4. A função transform_data não precisa mais retornar o df, mas o código original 
+        # estava estruturado para usar o 'df_transformed', então vamos manter a estrutura
         
         return True
     
     except Exception as e:
         print(f"ERRO CRÍTICO no Controller: {e}")
         return False
-
-
-transform_data(pd.read_excel("downloads\TitulosRecebidos_02-10-2025_1200.xlsx"), "02-10-2025_12-00")
+    
+    
+#process_and_upload(Path("downloads/TitulosRecebidos_07-10-2025_1900.xlsx"), "07102025_1900")
+"%d%m%Y_%H%M"

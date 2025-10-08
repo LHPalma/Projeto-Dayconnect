@@ -284,7 +284,6 @@ def extrair_data_hora_da_pagina(wait: WebDriverWait) -> str:
             hora_str = match.group(2) # Ex: 02
             
             hora_24h = convert_to_24h(hora_str, None)
-            hora_24h = "12"
             
             data_formatada = data_str.replace('/', '-') # Remove as barras
             nome_arquivo_base = f"{data_formatada}_{hora_24h}00" 

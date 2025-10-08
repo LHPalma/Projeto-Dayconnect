@@ -1,6 +1,1 @@
-SERVER = "192.168.1.219"
-DATABASE = "PLANEJAMENTO"
-USERNAME = "Planejamento"
-PASSWORD = "xmypKOjvRxucrm9o"
-DRIVER_NAME = "SQL Server" 
-TABLE_NAME = "LIQUIDADOS"
+"%d%m%Y_%H%M"

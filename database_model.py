@@ -8,7 +8,7 @@ SERVER = "192.168.1.219"
 DATABASE = "PLANEJAMENTO"
 USERNAME = "svc_desenvolvimento"
 PASSWORD = "Desenvolvimento#2740"
-DRIVER_NAME = "SQL Server" 
+DRIVER_NAME = "ODBC Driver 17 for SQL Server" 
 TABLE_NAME = "LIQUIDADOS"
 
 
@@ -31,18 +31,18 @@ def create_sql_engine():
 
 def upload_dataframe_to_sql(df, engine):
     """Insere o DataFrame Pandas na tabela LIQUIDADOS."""
-    from pandas.io.sql import types as sqltypes
+    from sqlalchemy import types as sqltypes
     
     print(f"\nModel: Conectando e inserindo {len(df)} registros na tabela {TABLE_NAME}...")
     
     # Mapeamento explícito dos tipos de dados para o SQL Server
     dtype_mapping = {
         'NossoNumero': sqltypes.BigInteger(),
-        'CpfCnpj': sqltypes.Unicode(length=50), # Adaptado para CPF/CNPJ
-        'NomeSacado': sqltypes.Unicode(length=255),
+        'CpfCnpj': sqltypes.NVARCHAR(length=50),
+        'NomeSacado': sqltypes.NVARCHAR(length=255),
         'DataVencimento': sqltypes.Date(),
         'VlrPago': sqltypes.Numeric(precision=10, scale=2),
-        'NossoNumeroFormatado': sqltypes.Unicode(length=50),
+        'NossoNumeroFormatado': sqltypes.NVARCHAR(length=50),
         'DataImportacao': sqltypes.DateTime(),
         'DataUltAtualizacao': sqltypes.DateTime()
     }
@@ -90,20 +90,22 @@ AND CONVERT(DATE, A.DATA_CAD) = CONVERT(DATE, GETDATE())
     
     print("Model: Consultando IDs já processados no sistema de origem...")
     
+    print("Model: Consultando IDs já processados no sistema de origem...")
+    
     try:
         with engine.connect() as connection:
-            # Use o pandas.read_sql para executar a consulta e obter um DataFrame
-            # NOTA: O pandas.read_sql pode ser lento para grandes volumes.
+            
             df_processed = pd.read_sql(text(SQL_QUERY_PROCESSED_IDS), connection)
             
-            # Converte a coluna 'ID' para lista de strings
-            processed_ids = df_processed['ID'].astype(str).tolist()
+            # ALTERAÇÃO CHAVE: Pega os últimos 11 dígitos do 'ID' extraído 
+            # para corresponder ao NossoNumero (11 digitos) do arquivo Dayconnect.
+            processed_ids = df_processed['ID'].astype(str).str[-11:].tolist()
             print(f"Model: {len(processed_ids)} IDs já processados encontrados para exclusão.")
             return processed_ids
 
     except Exception as e:
         print(f"ERRO no Model (fetch_processed_ids): Falha ao executar a query de exclusão: {e}")
-        return [] # Retorna lista vazia para processar tudo em caso de falha de consulta
+        return []
     
 
 if __name__ == "__main__":
