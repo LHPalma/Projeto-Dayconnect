@@ -2,15 +2,16 @@ import urllib
 # Importante: precisamos do 'text' para consultas SQL em string
 from sqlalchemy import create_engine, text 
 import pyodbc 
+from dotenv import load_dotenv; load_dotenv()
+
 
 # --- CONFIGURAÇÕES DO BANCO DE DADOS ---
-SERVER = "192.168.1.219"
-DATABASE = "PLANEJAMENTO"
-USERNAME = "Planejamento"
-PASSWORD = "xmypKOjvRxucrm9o"
+SERVER = load_dotenv("DB_SERVER")
+DATABASE = load_dotenv("DB_DATABASE")
+USERNAME = load_dotenv("DB_USERNAME")
+PASSWORD = load_dotenv("DB_PASSWORD")
 
-# Nome do driver confirmado na sua máquina
-DRIVER_NAME = "SQL Server" 
+DRIVER_NAME = load_dotenv("DB_DRIVER_NAME")
 
 
 def create_sql_engine():

@@ -110,15 +110,15 @@ def gerar_dataframe_vcon(engine):
 
 def salvar_relatorios_por_credor(df_completo):
     """
-    Filtra o DataFrame por 'Código do Credor' e salva um arquivo CSV para cada um.
+    Filtra o DataFrame por 'Código do Credor', salva um arquivo para cada um,
+    e retorna uma lista de dicionários com os caminhos dos arquivos.
     """
     if df_completo is None or df_completo.empty:
         print("Nenhum dado para processar. Nenhum relatório será salvo.")
-        return
-    
+        return []  # MODIFICAÇÃO: Retorna uma lista vazia
+
     lista_para_upload: List[Dict[str, Any]] = []
 
-    # Mapeamento de código do credor para nome do arquivo
     mapa_credores = {
         4: "Daycoval Veiculos",
         5: "Daycoval Juridico",
@@ -126,33 +126,29 @@ def salvar_relatorios_por_credor(df_completo):
         9: "Daycoval Daycred",
         16: "Daycoval Focos"
     }
-
-    # Pega a data e hora atual para nomear os arquivos
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    # Agrupa o DataFrame pelos valores únicos da coluna 'Código do Credor'
     grupos_de_credores = df_completo.groupby('Código do Credor')
 
     print("\nIniciando a geração de relatórios por credor...")
     for codigo_credor, df_credor in grupos_de_credores:
-        # Obtém o nome do credor do mapa, ou 'Outros' se não encontrar
         nome_credor = mapa_credores.get(codigo_credor, "Outros")
-
-        # Monta o nome do arquivo
-        nome_arquivo = f"{nome_credor}_{timestamp}.xlsx"
+        nome_arquivo = f"{nome_credor}_{timestamp}.csv"
         caminho_arquivo = PASTA_RELATORIOS / nome_arquivo
 
         try:
-            df_credor.to_excel(caminho_arquivo, index=False)
+            df_credor.to_csv(caminho_arquivo, index=False, encoding="utf-8-sig")
             print(f"  - Relatório salvo com sucesso em: {caminho_arquivo}")
             
-            lista_para_upload( {
-                "arquivo": str(caminho_arquivo.resolve()),
+            lista_para_upload.append({
+                "arquivo": str(caminho_arquivo.resolve()), # Usar .resolve() para caminho absoluto
                 "credor": nome_credor
-            } )
+            })
             
         except Exception as e:
             print(f"  - ERRO ao salvar o relatório para o credor {codigo_credor}: {e}")
+
+    # MODIFICAÇÃO PRINCIPAL: Adicionado o retorno da lista
+    return lista_para_upload
 
 
 def main():
@@ -175,6 +171,7 @@ def main():
         # Encerra a pool de conexões da engine
         sql_engine.dispose()
         print("\nEngine de conexão com o banco de dados finalizada.")
+    
     
     # Retorna a lista de arquivos (que estará preenchida ou vazia)
     return arquivos_gerados

@@ -2,6 +2,11 @@ from typing import Any, Dict, List
 
 from ServiceRoutineClimbLowOccurence import ServiceRoutineClimbLowOccurence
 
+
+from gera_relatorios_VCON import main
+
+
+
 def fazer_upload_vcon(arquivos_para_upload: List[Dict[str, Any]]):
     """
     Recebe uma lista de dicionários e realiza o upload de cada arquivo.
@@ -28,3 +33,5 @@ def fazer_upload_vcon(arquivos_para_upload: List[Dict[str, Any]]):
     except Exception as e:
         print(f"ERRO inesperado durante o processo de upload: {e}")
 
+arq = main()
+fazer_upload_vcon(arq)
