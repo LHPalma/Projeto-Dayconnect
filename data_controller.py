@@ -10,7 +10,7 @@ from database_model import create_sql_engine, upload_dataframe_to_sql, fetch_pro
 
 
 # A string de data/hora do site virá no formato DDMMAAAA_HHMM (e.g., '02102025_1400')
-DATA_FORMAT_SITE = "%d-%m-%Y_%H-%M"
+DATA_FORMAT_SITE = "%d-%m-%Y_%H%M"
 
 
 def transform_data(df: pd.DataFrame, data_atualizacao_str: str) -> pd.DataFrame:
@@ -88,7 +88,7 @@ def transform_data(df: pd.DataFrame, data_atualizacao_str: str) -> pd.DataFrame:
     
     # 5. Seleciona e retorna colunas na ordem do banco
     return df[['NossoNumero', 'CpfCnpj', 'NomeSacado', 'DataVencimento', 'VlrPago', 
-               'NossoNumeroFormatado', 'DataImportacao', 'DataUltAtualizacao']]
+               'NossoNumeroFormatado', 'DataImportacao', 'DataUltAtualizacao']].copy()
 
 def process_and_upload(caminho_arquivo_csv: Path, data_atualizacao_str: str):
     """Função principal do Controller: Orquestra a ETL (Extração, Transformação e Carga)."""
@@ -134,9 +134,6 @@ def process_and_upload(caminho_arquivo_csv: Path, data_atualizacao_str: str):
         else:
             print("Controller: Nenhum novo título para fazer upload. Encerrando upload.")
 
-        # 4. A função transform_data não precisa mais retornar o df, mas o código original 
-        # estava estruturado para usar o 'df_transformed', então vamos manter a estrutura
-        
         return True
     
     except Exception as e:
@@ -144,5 +141,5 @@ def process_and_upload(caminho_arquivo_csv: Path, data_atualizacao_str: str):
         return False
     
     
-#process_and_upload(Path("downloads/TitulosRecebidos_07-10-2025_1900.xlsx"), "07102025_1900")
-"%d%m%Y_%H%M"
+#process_and_upload(Path("downloads/TitulosRecebidos_08-10-2025_1100.xlsx"), "07-10-2025_1100")
+

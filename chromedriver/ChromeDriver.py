@@ -38,6 +38,11 @@ class ChromeDriver:
         self.options.add_argument(
             f"user-data-dir=C:\\Users\\{user}\\AppData\\Local\\Google\\Chrome\\User Data\\Profile 2"
         )
+        
+        # --- AIRFLOW ---
+        #self.options.add_argument("--headless") # Essencial para rodar no Airflow
+        #self.options.add_argument("--window-size=1920,1080") # Define um tamanho de janela
+
 
         self.service = ChromeService(executable_path=ChromeDriverManager().install())
 

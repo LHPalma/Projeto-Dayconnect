@@ -21,7 +21,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 
-from ChromeDriver import ChromeDriver
+from chromedriver.ChromeDriver import ChromeDriver
 
 from data_controller import process_and_upload
 
@@ -32,7 +32,7 @@ SENHA_ALVO = "01082018"
 # endregion
 
 # region Caminhos
-CWD = Path.cwd()
+CWD = Path(os.path.dirname(os.path.abspath(__file__)))
 PATH_DOWNLOAD = CWD / "downloads"
 PATH_DIGIT_TEMPLATES = CWD / "digit_variations" # A pasta onde suas variações estão
 # endregion Caminhos
@@ -215,47 +215,7 @@ def sequencia_de_cliques(wait: WebDriverWait, mapeamento_numeros_para_id: Dict[s
     sleep(2)
     btn_acessar.click()
 
-'''
-def baixar_excel(driver, wait):
-    print("Iniciando processo de download do Excel...")
-    try:
-        xpath_do_botao = "//d-button[@id='btnExportarExcel']/button"
 
-        # Botão exportar
-        button_element = wait.until(
-            EC.presence_of_element_located((By.XPATH, xpath_do_botao))
-        )
-
-        # 2. Clica no botão usando JavaScript (método mais robusto)
-        print("Clicando para exportar Excel...")
-        driver.execute_script("arguments[0].click();", button_element)
-
-        # Aguarda o download
-        timeout = time.time() + 30
-        download_completo = False
-        print("Aguardando o arquivo ser baixado...")
-        while time.time() < timeout:
-            arquivos = list(PATH_DOWNLOAD.glob("*.xlsx"))
-            arquivos_temp = list(PATH_DOWNLOAD.glob("*.crdownload"))
-
-            if arquivos and not arquivos_temp:
-                print(
-                    f"Download concluído! Arquivo '{arquivos[0].name}' salvo em '{PATH_DOWNLOAD}'"
-                )
-                download_completo = True
-                break
-            sleep(1)
-
-        if not download_completo:
-            print("O tempo para download esgotou e o arquivo não foi encontrado.")
-
-    except Exception as e:
-        print(f"Erro ao tentar baixar o arquivo: {e}")
-'''
-
-# Adicione este import no topo do seu arquivo, se ainda não tiver
-from datetime import datetime
-import re # Para expressões regulares
 
 def extrair_data_hora_da_pagina(wait: WebDriverWait) -> str:
     """
@@ -300,55 +260,52 @@ def extrair_data_hora_da_pagina(wait: WebDriverWait) -> str:
 
 def convert_to_24h(hora_str: str, periodo_str: str | None) -> str:
     """
-    Converte uma hora no formato 12h (que o site envia) para 24h, aplicando a regra 
-    de inferência baseada no horário atual do sistema se o indicador de período for ambíguo.
-    Retorna a hora em formato string de 2 dígitos (ex: '05', '17').
+    Converte uma hora no formato 12h para 24h. Se o período (AM/PM)
+    for ambíguo, infere o mais recente que já ocorreu no dia.
     """
+    from datetime import datetime
+    import re
 
     hora_int = int(hora_str)
-    adicionar_doze_horas = False
-    
-    # 1. Prioridade 1: Lógica com indicador AM/PM/tarde/manhã explícito
-    if periodo_str:
-        if re.search(r'PM|da tarde|da noite', periodo_str, re.IGNORECASE):
-            # 1 PM até 11 PM -> Adiciona 12h. 12 PM (meio-dia) permanece 12h.
-            if hora_int >= 1 and hora_int <= 11:
-                adicionar_doze_horas = True
-        elif re.search(r'AM|da manhã', periodo_str, re.IGNORECASE):
-            # 12 AM (Meia-noite) -> 00h.
-            if hora_int == 12:
-                hora_int = 0
-    
-    # 2. Prioridade 2 (Regra de Inferência p/ 1h-11h):
-    elif hora_int >= 1 and hora_int <= 11:
-        hora_atual_sistema = datetime.now().hour 
-        
-        # Se a hora extraída for < 12 e o sistema estiver após meio-dia (>= 12h), assume-se PM.
-        if hora_atual_sistema >= 12: 
-            adicionar_doze_horas = True
 
-    # 3. Prioridade 3 (Regra de Inferência p/ 12h ambíguo - O seu pedido)
-    # Se não há indicador (not periodo_str) e a hora é 12, precisamos inferir:
-    elif hora_int == 12 and not periodo_str:
-        hora_atual_sistema = datetime.now().hour
-        
-        # Se a hora atual do sistema estiver próxima da meia-noite (0h ou 1h), 
-        # o relatório de "12 horas" é mais provável ser 12 AM (00h).
-        if hora_atual_sistema <= 1: 
-             print("Alerta: Hora 12h ambígua. Inferindo AM (meia-noite) com base no horário atual do sistema.")
-             hora_int = 0 # 12 AM -> 00h
-        # Se o sistema estiver em qualquer outra hora (2h a 23h), 
-        # assumimos que o 12h é 12 PM (meio-dia).
+    # Prioridade 1: Período explícito (AM/PM) no texto
+    if periodo_str:
+        is_pm = re.search(r'PM|da tarde|da noite', periodo_str, re.IGNORECASE)
+        is_am = re.search(r'AM|da manhã', periodo_str, re.IGNORECASE)
+
+        if is_pm:
+            return f"{hora_int + 12:02d}" if hora_int != 12 else "12"
+        elif is_am:
+            return "00" if hora_int == 12 else f"{hora_int:02d}"
+
+    # Prioridade 2: Inferência baseada na hora do sistema (quando não há AM/PM)
+    hora_atual_sistema = datetime.now().hour
+
+    # Caso especial para "12 horas"
+    if hora_int == 12:
+        # Se a hora atual for muito cedo (0h ou 1h), "12 horas" provavelmente é a meia-noite que passou.
+        if hora_atual_sistema <= 1:
+            print("Alerta: Hora '12h' ambígua. Inferindo como 00h (meia-noite).")
+            return "00"
+        # Em todos os outros casos, é mais provável que seja meio-dia.
         else:
-             print("Alerta: Hora 12h ambígua. Inferindo PM (meio-dia) com base no horário atual do sistema.")
-             # hora_int já é 12, então não é necessário adicionar 12.
-            
-    # Aplica a transformação de 12h para 24h
-    if adicionar_doze_horas:
-        hora_int += 12
-    
-    # Retorna a hora formatada com 2 dígitos (ex: '05' ou '17')
-    return f"{hora_int:02d}"
+            print("Alerta: Hora '12h' ambígua. Inferindo como 12h (meio-dia).")
+            return "12"
+
+    # Lógica principal para horas de 1 a 11 (seu caso)
+    hora_pm_potencial = hora_int + 12
+
+    # Se a versão PM da hora do relatório (ex: 23h para "11h") for maior que a hora atual (ex: 12h),
+    # significa que a hora PM ainda não aconteceu hoje. Portanto, a hora correta só pode ser a AM.
+    if hora_pm_potencial > hora_atual_sistema:
+        # Seu cenário: 11 (hora_int) -> 23 (hora_pm_potencial). 12 (hora_atual_sistema).
+        # 23 > 12 é VERDADEIRO, então a função retorna "11" (correto).
+        return f"{hora_int:02d}"
+    else:
+        # Cenário alternativo: hora do sistema é 15h, hora do relatório é 2h.
+        # 2 (hora_int) -> 14 (hora_pm_potencial). 15 (hora_atual_sistema).
+        # 14 > 15 é FALSO, então a função retorna "14" (2h da tarde, correto).
+        return f"{hora_pm_potencial:02d}"
 
 
 def baixar_excel(driver: WebDriver, wait: WebDriverWait, nome_arquivo_base: str) -> str | Path:
@@ -448,32 +405,44 @@ def insere_codigo_usuario(driver: WebDriver, wait: WebDriverWait):
     ).click()
 
 
-def main():
+def run_dayconnect_automation():
+    PATH_DOWNLOAD.mkdir(exist_ok=True)
+    
+    from chromedriver.ChromeDriver import ChromeDriver
+    
     chrome_driver = ChromeDriver(download_path=PATH_DOWNLOAD)
     driver, wait = chrome_driver.start_driver()
+    
+    try:
+        login(driver, wait)
 
-    login(driver, wait)
+        sleep(3)
 
-    sleep(3)
+        driver.get(URL_PREVIA_DE_TITULOS)
+        sleep(5)
+        nome_excel_base = extrair_data_hora_da_pagina(wait)
 
-    driver.get(URL_PREVIA_DE_TITULOS)
-    sleep(5)
-    nome_excel_base = extrair_data_hora_da_pagina(wait)
+        caminho_arquivo = baixar_excel(driver, wait, nome_excel_base)
 
-    caminho_arquivo = baixar_excel(driver, wait, nome_excel_base)
+        if caminho_arquivo and os.path.exists(caminho_arquivo):
+            logging.info(f"Arquivo baixado com sucesso: {caminho_arquivo}")
+            logging.info(f"Iniciando fase de UPLOAD")
+            
+            process_and_upload(caminho_arquivo, nome_excel_base)
+        else:
+            logging.error("Não foi possível processar o arquivo. Download falhou ou caminho inválido.")
+            
+    except Exception as e:
+        print(f"Ocorreu um erro durante a automação: {e}")
+        # Tira um screenshot em caso de erro para facilitar o debug
+        driver.save_screenshot(str(CWD / "error_screenshot.png"))
+        raise
 
-    if caminho_arquivo and os.path.exists(caminho_arquivo):
-        logging.info(f"Arquivo baixado com sucesso: {caminho_arquivo}")
-        logging.info(f"Iniciando fase de UPLOAD")
         
-        process_and_upload(caminho_arquivo, nome_excel_base)
-    else:
-        logging.error("Não foi possível processar o arquivo. Download falhou ou caminho inválido.")
-
-
-    sleep(15)
-    driver.quit()
+    finally:
+        sleep(15)
+        driver.quit()
 
 
 if __name__ == "__main__":
-    main()
+    run_dayconnect_automation()
